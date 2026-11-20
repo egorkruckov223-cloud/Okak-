@@ -1,0 +1,2097 @@
+```html
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>V12 Twin-Cam 3D Simulator</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #060908;
+      color: #e5e7eb;
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+      touch-action: none;
+    }
+    .font-mono-tech {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .viewport-shell {
+      background: linear-gradient(180deg, #0b120e 0%, #060908 100%);
+      border: 1px solid rgba(56, 229, 141, 0.28);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.88), 0 0 28px rgba(56, 229, 141, 0.08);
+    }
+    .pedal-btn {
+      background: linear-gradient(180deg, #0f1713 0%, #070b09 100%);
+      border: 1.5px solid rgba(56, 229, 141, 0.28);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(114, 245, 176, 0.08);
+      position: relative;
+      overflow: hidden;
+      touch-action: none;
+      transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.08s ease;
+    }
+    .pedal-btn:active {
+      transform: scale(0.985);
+    }
+    .pedal-frein-active {
+      border-color: #ef4444 !important;
+      box-shadow: 0 0 22px rgba(239, 68, 68, 0.35), inset 0 0 14px rgba(239, 68, 68, 0.18);
+    }
+    .pedal-gaz-active {
+      border-color: #38e58d !important;
+      box-shadow: 0 0 22px rgba(56, 229, 141, 0.42), inset 0 0 14px rgba(56, 229, 141, 0.22);
+    }
+    .pedal-fill-frein {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(0deg, rgba(239, 68, 68, 0.44) 0%, rgba(239, 68, 68, 0.08) 100%);
+      pointer-events: none;
+    }
+    .pedal-fill-gaz {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(0deg, rgba(56, 229, 141, 0.44) 0%, rgba(56, 229, 141, 0.08) 100%);
+      pointer-events: none;
+    }
+    @keyframes blastFlash {
+      0% { opacity: 0.95; }
+      100% { opacity: 0; }
+    }
+    .blast-flash-anim {
+      animation: blastFlash 0.72s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+  </style>
+</head>
+<body class="flex justify-center items-center w-screen h-screen bg-[#060908]">
+
+  <!-- Main Single-File Simulator Container -->
+  <main class="w-full max-w-[460px] h-full max-h-screen flex flex-col p-2.5 sm:p-3 gap-2.5">
+
+    <!-- 1. TOP HUD & 3D ENGINE VIEWPORT (~72% Height) -->
+    <section class="viewport-shell relative w-full h-[72%] rounded-2xl overflow-hidden flex flex-col">
+
+      <!-- Explosion Flash Overlay -->
+      <div id="explosion-flash" class="absolute inset-0 z-20 bg-gradient-to-b from-[#72f5b0]/55 via-amber-400/80 to-red-600/90 opacity-0 pointer-events-none"></div>
+
+      <!-- Top HUD Bar -->
+      <header class="relative z-10 flex items-center justify-between px-3.5 pt-3 pb-2 bg-gradient-to-b from-[#060908]/95 via-[#060908]/75 to-transparent pointer-events-none">
+        <div class="flex flex-col gap-0.5">
+          <div class="flex items-center gap-1.5">
+            <span class="font-mono-tech text-[10px] sm:text-[11px] font-bold tracking-widest text-gray-100 uppercase">
+              V12 TWIN-CAM
+            </span>
+            <span class="text-[#38e58d]/50 font-bold">•</span>
+            <span id="hud-status" class="font-mono-tech text-[10px] sm:text-[11px] font-extrabold tracking-widest text-[#38e58d] uppercase">
+              ACTIF
+            </span>
+          </div>
+
+          <div class="flex items-baseline gap-2 font-mono-tech">
+            <span id="hud-rpm" class="text-lg sm:text-xl font-extrabold text-white tracking-tight">880</span>
+            <span class="text-[10px] font-bold text-[#72f5b0]/80 tracking-wider">TR/MIN</span>
+            <span class="text-[#38e58d]/40">|</span>
+            <span id="hud-speed" class="text-sm sm:text-base font-extrabold text-[#38e58d]">0</span>
+            <span class="text-[10px] font-bold text-[#72f5b0]/80 tracking-wider">KM/H</span>
+          </div>
+
+          <!-- Compact Turbo Boost Indicator -->
+          <div class="flex items-center gap-1.5 pt-0.5">
+            <span class="font-mono-tech text-[9px] font-bold tracking-wider text-[#72f5b0]/75 uppercase">TURBO</span>
+            <div class="w-20 h-1 rounded-full bg-black/80 overflow-hidden border border-[#38e58d]/25">
+              <div id="turbo-bar" class="h-full rounded-full bg-gradient-to-r from-[#38e58d] to-[#72f5b0]" style="width: 0%;"></div>
+            </div>
+            <span id="hud-boost" class="font-mono-tech text-[9px] font-bold text-[#72f5b0]">0.00 BAR</span>
+          </div>
+        </div>
+
+        <!-- Clickable SON AUTO Audio Toggle Button -->
+        <button
+          id="btn-son-auto"
+          type="button"
+          class="pointer-events-auto px-2.5 py-1 rounded-full bg-[#0c1611]/90 hover:bg-[#13221a] active:scale-95 border border-[#38e58d]/50 flex items-center gap-1.5 transition-all cursor-pointer"
+        >
+          <span id="son-dot" class="w-2 h-2 rounded-full bg-[#38e58d]"></span>
+          <span id="son-label" class="font-mono-tech text-[9px] sm:text-[10px] font-bold tracking-widest text-[#72f5b0] uppercase">
+            SON AUTO
+          </span>
+        </button>
+      </header>
+
+      <!-- 3D / 2D Engine Canvas Container -->
+      <div id="canvas-container" class="relative flex-1 w-full cursor-grab active:cursor-grabbing">
+        <canvas id="engine-canvas" class="w-full h-full block"></canvas>
+
+        <!-- Rebuild Button Overlay When Exploded at >= 1000 KM/H -->
+        <div id="rebuild-overlay" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/30 pointer-events-none">
+          <button
+            id="btn-rebuild"
+            type="button"
+            class="pointer-events-auto px-5 py-2.5 rounded-xl bg-[#0a140f]/95 hover:bg-[#11241a] active:scale-95 border-2 border-[#38e58d] text-[#72f5b0] font-mono-tech text-xs sm:text-sm font-extrabold tracking-[0.16em] uppercase shadow-[0_0_24px_rgba(56,229,141,0.45)] transition-all cursor-pointer"
+          >
+            RECONSTRUIRE V12
+          </button>
+        </div>
+
+        <!-- Speed-to-1000 KM/H Progress Gauge along Bottom of Viewport -->
+        <div class="absolute bottom-2 inset-x-3.5 pointer-events-none">
+          <div class="w-full h-1 rounded-full bg-black/75 overflow-hidden border border-[#38e58d]/25">
+            <div id="gauge-bar" class="h-full rounded-full bg-gradient-to-r from-[#38e58d] via-[#72f5b0] to-[#ef4444]" style="width: 4%;"></div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 2. BOTTOM CONTROLS: ONLY FREIN & GAZ PEDALS (~28% Height) -->
+    <section class="w-full h-[28%] grid grid-cols-2 gap-2.5 pb-0.5">
+
+      <!-- Left Pedal: FREIN (Brake) -->
+      <div
+        id="pedal-frein"
+        role="button"
+        tabindex="0"
+        aria-label="FREIN"
+        class="pedal-btn rounded-2xl flex flex-col items-center justify-between py-4 px-3 cursor-pointer"
+      >
+        <div id="fill-frein" class="pedal-fill-frein" style="height: 0%;"></div>
+        <span id="pct-frein" class="font-mono-tech text-2xl sm:text-3xl font-extrabold text-[#ef4444] z-10">0%</span>
+        <div class="flex flex-col items-center gap-1 z-10">
+          <span class="text-xs sm:text-sm font-extrabold tracking-[0.2em] text-[#ef4444]">FREIN</span>
+          <span class="w-9 h-1 rounded-full bg-[#ef4444]/40"></span>
+        </div>
+      </div>
+
+      <!-- Right Pedal: GAZ (Gas) -->
+      <div
+        id="pedal-gaz"
+        role="button"
+        tabindex="0"
+        aria-label="GAZ"
+        class="pedal-btn rounded-2xl flex flex-col items-center justify-between py-4 px-3 cursor-pointer"
+      >
+        <div id="fill-gaz" class="pedal-fill-gaz" style="height: 0%;"></div>
+        <span id="pct-gaz" class="font-mono-tech text-2xl sm:text-3xl font-extrabold text-[#38e58d] z-10">0%</span>
+        <div class="flex flex-col items-center gap-1 z-10">
+          <span class="text-xs sm:text-sm font-extrabold tracking-[0.2em] text-[#38e58d]">GAZ</span>
+          <span class="w-9 h-1 rounded-full bg-[#38e58d]/40"></span>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script>
+    /**
+     * =========================================================================
+     * 1. SIMULATION STATE & HUD REFERENCES
+     * =========================================================================
+     */
+    const IDLE_RPM = 880;
+    const EXPLOSION_SPEED = 1000;
+
+    const state = {
+      rpm: IDLE_RPM,
+      speedKmh: 0,
+      gasPct: 0,
+      brakePct: 0,
+      turboBoost: 0, // Normalized 0.0 -> 1.45 (~up to 1.45 bar boost)
+      crankAngle: 0,
+      audioEnabled: true,
+      audioStarted: false,
+      exploded: false,
+      explosionElapsed: 0
+    };
+
+    const hudStatus = document.getElementById('hud-status');
+    const hudRpm = document.getElementById('hud-rpm');
+    const hudSpeed = document.getElementById('hud-speed');
+    const hudBoost = document.getElementById('hud-boost');
+    const turboBar = document.getElementById('turbo-bar');
+    const gaugeBar = document.getElementById('gauge-bar');
+    const explosionFlash = document.getElementById('explosion-flash');
+    const rebuildOverlay = document.getElementById('rebuild-overlay');
+    const btnRebuild = document.getElementById('btn-rebuild');
+
+    const btnSonAuto = document.getElementById('btn-son-auto');
+    const sonDot = document.getElementById('son-dot');
+    const sonLabel = document.getElementById('son-label');
+
+    const pedalFrein = document.getElementById('pedal-frein');
+    const pedalGaz = document.getElementById('pedal-gaz');
+    const fillFrein = document.getElementById('fill-frein');
+    const fillGaz = document.getElementById('fill-gaz');
+    const pctFrein = document.getElementById('pct-frein');
+    const pctGaz = document.getElementById('pct-gaz');
+
+    let holdingGas = false;
+    let holdingBrake = false;
+    let slidingGas = false;
+    let slidingBrake = false;
+
+    function updateAudioBadge() {
+      if (state.audioEnabled) {
+        sonDot.classList.remove('bg-gray-500');
+        sonDot.classList.add('bg-[#38e58d]');
+        sonLabel.classList.remove('text-gray-400');
+        sonLabel.classList.add('text-[#72f5b0]');
+        sonLabel.textContent = state.audioStarted ? 'SON AUTO • ON' : 'SON AUTO';
+      } else {
+        sonDot.classList.remove('bg-[#38e58d]');
+        sonDot.classList.add('bg-gray-500');
+        sonLabel.classList.remove('text-[#72f5b0]');
+        sonLabel.classList.add('text-gray-400');
+        sonLabel.textContent = 'SON OFF';
+      }
+    }
+
+    function updateStatusUI() {
+      if (state.exploded) {
+        hudStatus.textContent = 'EXPLODED • 1000+ KM/H';
+        hudStatus.classList.remove('text-[#38e58d]');
+        hudStatus.classList.add('text-[#ef4444]');
+        rebuildOverlay.classList.remove('hidden');
+      } else {
+        hudStatus.textContent = 'ACTIF';
+        hudStatus.classList.remove('text-[#ef4444]');
+        hudStatus.classList.add('text-[#38e58d]');
+        rebuildOverlay.classList.add('hidden');
+      }
+    }
+
+    function updatePedalsUI() {
+      const g = Math.round(state.gasPct);
+      const b = Math.round(state.brakePct);
+
+      pctGaz.textContent = `${g}%`;
+      fillGaz.style.height = `${g}%`;
+      pedalGaz.classList.toggle('pedal-gaz-active', g > 0 || holdingGas);
+
+      pctFrein.textContent = `${b}%`;
+      fillFrein.style.height = `${b}%`;
+      pedalFrein.classList.toggle('pedal-frein-active', b > 0 || holdingBrake);
+    }
+
+    /**
+     * =========================================================================
+     * 2. PROCEDURAL WEB AUDIO V12 & MULTI-LAYER EXPLOSION SYNTHESIZER
+     * =========================================================================
+     */
+    const audioSynth = {
+      ctx: null,
+      oscFiring: null,
+      oscHarmonic: null,
+      oscSub: null,
+      filter: null,
+      gain: null,
+
+      startOnGesture() {
+        try {
+          if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return null;
+
+            this.ctx = new AudioCtx();
+            this.oscFiring = this.ctx.createOscillator();
+            this.oscHarmonic = this.ctx.createOscillator();
+            this.oscSub = this.ctx.createOscillator();
+            this.filter = this.ctx.createBiquadFilter();
+            this.gain = this.ctx.createGain();
+
+            this.oscFiring.type = 'sawtooth';
+            this.oscHarmonic.type = 'triangle';
+            this.oscSub.type = 'sine';
+
+            this.filter.type = 'lowpass';
+            this.filter.frequency.value = 320;
+            this.filter.Q.value = 3.2;
+
+            this.gain.gain.value = 0.0001;
+
+            this.oscFiring.connect(this.filter);
+            this.oscHarmonic.connect(this.filter);
+            this.oscSub.connect(this.filter);
+            this.filter.connect(this.gain);
+            this.gain.connect(this.ctx.destination);
+
+            this.oscFiring.start();
+            this.oscHarmonic.start();
+            this.oscSub.start();
+          }
+
+          if (this.ctx && state.audioEnabled && this.ctx.state === 'suspended') {
+            this.ctx.resume().then(() => {
+              state.audioStarted = true;
+              updateAudioBadge();
+            }).catch(() => {});
+          } else if (this.ctx && this.ctx.state === 'running') {
+            state.audioStarted = true;
+            updateAudioBadge();
+          }
+
+          return this.ctx;
+        } catch (e) {
+          return null;
+        }
+      },
+
+      toggle() {
+        try {
+          if (!state.audioEnabled) {
+            state.audioEnabled = true;
+            this.startOnGesture();
+          } else {
+            state.audioEnabled = false;
+            if (this.ctx && this.gain) {
+              this.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.03);
+            }
+          }
+          updateAudioBadge();
+        } catch (e) {
+          // Safe fallback if audio toggle is restricted
+        }
+      },
+
+      playExplosion() {
+        try {
+          const ctx = this.startOnGesture();
+          if (!ctx) return;
+
+          const now = ctx.currentTime;
+          if (this.gain) {
+            this.gain.gain.cancelScheduledValues(now);
+            this.gain.gain.setValueAtTime(0.0001, now);
+          }
+
+          if (!state.audioEnabled) return;
+
+          // 1. Sub-bass concussion thump + deep rumble
+          const subOsc = ctx.createOscillator();
+          const subGain = ctx.createGain();
+          subOsc.type = 'sine';
+          subOsc.frequency.setValueAtTime(125, now);
+          subOsc.frequency.exponentialRampToValueAtTime(20, now + 1.25);
+
+          subGain.gain.setValueAtTime(0.72, now);
+          subGain.gain.exponentialRampToValueAtTime(0.001, now + 1.35);
+
+          subOsc.connect(subGain);
+          subGain.connect(ctx.destination);
+          subOsc.start(now);
+          subOsc.stop(now + 1.4);
+
+          const rumbleOsc = ctx.createOscillator();
+          const rumbleGain = ctx.createGain();
+          rumbleOsc.type = 'triangle';
+          rumbleOsc.frequency.setValueAtTime(68, now + 0.03);
+          rumbleOsc.frequency.exponentialRampToValueAtTime(26, now + 2.2);
+
+          rumbleGain.gain.setValueAtTime(0.35, now + 0.03);
+          rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + 2.3);
+
+          rumbleOsc.connect(rumbleGain);
+          rumbleGain.connect(ctx.destination);
+          rumbleOsc.start(now + 0.03);
+          rumbleOsc.stop(now + 2.35);
+
+          // 2. Filtered combustion noise burst & shockwave crackle
+          const blastDuration = 2.35;
+          const blastSamples = Math.floor(ctx.sampleRate * blastDuration);
+          const blastBuffer = ctx.createBuffer(1, blastSamples, ctx.sampleRate);
+          const blastData = blastBuffer.getChannelData(0);
+          let lpState = 0;
+          for (let i = 0; i < blastSamples; i++) {
+            const t = i / ctx.sampleRate;
+            const white = Math.random() * 2 - 1;
+            lpState = lpState * 0.72 + white * 0.28;
+            const env = Math.pow(Math.max(0, 1 - t / blastDuration), 1.45);
+            blastData[i] = (white * 0.48 + lpState * 0.75) * env;
+          }
+
+          const blastNoise = ctx.createBufferSource();
+          blastNoise.buffer = blastBuffer;
+
+          const blastFilter = ctx.createBiquadFilter();
+          blastFilter.type = 'lowpass';
+          blastFilter.frequency.setValueAtTime(3000, now);
+          blastFilter.frequency.exponentialRampToValueAtTime(110, now + blastDuration);
+          blastFilter.Q.value = 1.5;
+
+          const blastGain = ctx.createGain();
+          blastGain.gain.setValueAtTime(0.62, now);
+          blastGain.gain.exponentialRampToValueAtTime(0.001, now + blastDuration);
+
+          blastNoise.connect(blastFilter);
+          blastFilter.connect(blastGain);
+          blastGain.connect(ctx.destination);
+          blastNoise.start(now);
+          blastNoise.stop(now + blastDuration);
+
+          // 3. Staggered metallic debris clatter
+          const impactOffsets = [0.08, 0.21, 0.36, 0.54, 0.75, 1.02];
+          impactOffsets.forEach((delay, idx) => {
+            const hitTime = now + delay;
+            const clankOsc = ctx.createOscillator();
+            const clankGain = ctx.createGain();
+            const basePitch = 540 + ((idx * 211) % 780);
+            clankOsc.type = idx % 2 === 0 ? 'square' : 'sawtooth';
+            clankOsc.frequency.setValueAtTime(basePitch, hitTime);
+            clankOsc.frequency.exponentialRampToValueAtTime(basePitch * 0.4, hitTime + 0.14);
+
+            const bp = ctx.createBiquadFilter();
+            bp.type = 'bandpass';
+            bp.frequency.setValueAtTime(basePitch * 1.3, hitTime);
+            bp.Q.value = 4.5;
+
+            const amp = Math.max(0.03, 0.15 - idx * 0.018);
+            clankGain.gain.setValueAtTime(amp, hitTime);
+            clankGain.gain.exponentialRampToValueAtTime(0.0008, hitTime + 0.16);
+
+            clankOsc.connect(bp);
+            bp.connect(clankGain);
+            clankGain.connect(ctx.destination);
+            clankOsc.start(hitTime);
+            clankOsc.stop(hitTime + 0.18);
+          });
+
+          // 4. High-frequency boost/steam hiss tail
+          const hissDuration = 1.85;
+          const hissSamples = Math.floor(ctx.sampleRate * hissDuration);
+          const hissBuffer = ctx.createBuffer(1, hissSamples, ctx.sampleRate);
+          const hissData = hissBuffer.getChannelData(0);
+          for (let i = 0; i < hissSamples; i++) {
+            const t = i / ctx.sampleRate;
+            hissData[i] = (Math.random() * 2 - 1) * Math.exp(-t * 2.1);
+          }
+
+          const hissSource = ctx.createBufferSource();
+          hissSource.buffer = hissBuffer;
+
+          const hpFilter = ctx.createBiquadFilter();
+          hpFilter.type = 'highpass';
+          hpFilter.frequency.setValueAtTime(3400, now + 0.05);
+
+          const hissGain = ctx.createGain();
+          hissGain.gain.setValueAtTime(0.001, now);
+          hissGain.gain.linearRampToValueAtTime(0.11, now + 0.08);
+          hissGain.gain.exponentialRampToValueAtTime(0.0008, now + hissDuration);
+
+          hissSource.connect(hpFilter);
+          hpFilter.connect(hissGain);
+          hissGain.connect(ctx.destination);
+          hissSource.start(now + 0.05);
+          hissSource.stop(now + hissDuration + 0.06);
+        } catch (e) {
+          // Safe fallback if audio context is blocked
+        }
+      },
+
+      update(rpm, throttleNorm, boostNorm) {
+        try {
+          if (!this.ctx || !this.oscFiring || !this.oscHarmonic || !this.oscSub || !this.filter || !this.gain) {
+            return;
+          }
+          const now = this.ctx.currentTime;
+          if (!state.audioEnabled || state.exploded || rpm <= 1 || this.ctx.state !== 'running') {
+            this.gain.gain.setTargetAtTime(0.0001, now, 0.04);
+            return;
+          }
+
+          const baseHz = Math.min(2800, 24 + (rpm / 60) * 1.85);
+          this.oscFiring.frequency.setTargetAtTime(baseHz, now, 0.035);
+          this.oscHarmonic.frequency.setTargetAtTime(baseHz * 1.5, now, 0.035);
+          this.oscSub.frequency.setTargetAtTime(Math.max(24, baseHz * 0.5), now, 0.035);
+
+          const cutoff = Math.min(7200, 240 + (rpm / 60) * 3.8 + throttleNorm * 1100 + boostNorm * 950);
+          this.filter.frequency.setTargetAtTime(cutoff, now, 0.045);
+
+          const targetGain = Math.min(0.15, 0.028 + throttleNorm * 0.075 + boostNorm * 0.025);
+          this.gain.gain.setTargetAtTime(targetGain, now, 0.045);
+        } catch (e) {
+          // Safe audio update
+        }
+      }
+    };
+
+    btnSonAuto.addEventListener('click', (e) => {
+      e.stopPropagation();
+      audioSynth.toggle();
+    });
+
+    /**
+     * =========================================================================
+     * 3. RICH 3D V12 TWIN-CAM ENGINE (THREE.JS) + 2D CANVAS FALLBACK
+     * =========================================================================
+     */
+    const canvas = document.getElementById('engine-canvas');
+    const canvasContainer = document.getElementById('canvas-container');
+
+    let hasWebGL = false;
+    let scene = null;
+    let camera = null;
+    let renderer = null;
+    let rootGroup = null;
+    let engineGroup = null;
+    let platformLight = null;
+    let headerMaterial = null;
+    let shockwaveRing = null;
+
+    const defaultCam = { radius: 10.6, theta: 0.68, phi: 1.06 };
+    let camSpherical = { ...defaultCam };
+
+    const cylinders = [];
+    const camGears = [];
+    const camshafts = [];
+    const valveSprings = [];
+    const turboImpellers = [];
+    const debrisList = [];
+
+    let burstSystem = null;
+    let fireballSystem = null;
+    let smokeSystem = null;
+
+    function registerDebris(mesh, factor = 1.0) {
+      mesh.userData.origPos = mesh.position.clone();
+      mesh.userData.origRot = mesh.rotation.clone();
+      mesh.userData.origScale = mesh.scale.clone();
+      mesh.userData.vel = new THREE.Vector3();
+      mesh.userData.rotVel = new THREE.Vector3();
+      mesh.userData.factor = factor;
+      debrisList.push(mesh);
+    }
+
+    function createSoftRadialTexture(innerHex, midHex, outerHex) {
+      const c = document.createElement('canvas');
+      c.width = 128;
+      c.height = 128;
+      const g = c.getContext('2d');
+      const grad = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+      grad.addColorStop(0.0, innerHex);
+      grad.addColorStop(0.45, midHex);
+      grad.addColorStop(1.0, outerHex);
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 128, 128);
+      return new THREE.CanvasTexture(c);
+    }
+
+    function buildExplosionEffects() {
+      // 1. Glowing Sparks & Embers
+      const sparkCount = 210;
+      const positions = new Float32Array(sparkCount * 3);
+      const colors = new Float32Array(sparkCount * 3);
+      const velocities = [];
+
+      const palette = [
+        new THREE.Color(0xfff7ed),
+        new THREE.Color(0xfbbf24),
+        new THREE.Color(0xf97316),
+        new THREE.Color(0xef4444),
+        new THREE.Color(0x72f5b0)
+      ];
+
+      for (let i = 0; i < sparkCount; i++) {
+        positions[i * 3] = 0;
+        positions[i * 3 + 1] = 0.35;
+        positions[i * 3 + 2] = 0;
+
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const speed = 3.5 + Math.random() * 9.8;
+
+        velocities.push(
+          new THREE.Vector3(
+            Math.sin(phi) * Math.cos(theta) * speed,
+            Math.abs(Math.cos(phi)) * speed * 0.92 + 2.4,
+            Math.sin(phi) * Math.sin(theta) * speed
+          )
+        );
+
+        const col = palette[i % palette.length];
+        colors[i * 3] = col.r;
+        colors[i * 3 + 1] = col.g;
+        colors[i * 3 + 2] = col.b;
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+      const mat = new THREE.PointsMaterial({
+        size: 0.22,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      });
+
+      const points = new THREE.Points(geo, mat);
+      points.visible = false;
+      engineGroup.add(points);
+      burstSystem = { points, geo, mat, velocities };
+
+      // 2. Expanding Fireball Puffs
+      const fireTex = createSoftRadialTexture(
+        'rgba(255, 250, 220, 1)',
+        'rgba(251, 146, 60, 0.82)',
+        'rgba(220, 38, 38, 0)'
+      );
+      fireballSystem = { puffs: [] };
+      for (let f = 0; f < 16; f++) {
+        const spriteMat = new THREE.SpriteMaterial({
+          map: fireTex,
+          color: f % 2 === 0 ? 0xffedd5 : 0xfb923c,
+          transparent: true,
+          opacity: 0.0,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending
+        });
+        const sprite = new THREE.Sprite(spriteMat);
+        sprite.visible = false;
+        engineGroup.add(sprite);
+
+        const ang = (f / 16) * Math.PI * 2 + Math.random() * 0.35;
+        const radSpeed = 1.7 + Math.random() * 2.8;
+        fireballSystem.puffs.push({
+          sprite,
+          vel: new THREE.Vector3(
+            Math.cos(ang) * radSpeed,
+            1.7 + Math.random() * 2.9,
+            Math.sin(ang) * radSpeed
+          ),
+          startScale: 0.75 + Math.random() * 0.7,
+          growRate: 2.9 + Math.random() * 2.2
+        });
+      }
+
+      // 3. Billowing Smoke Plumes
+      const smokeTex = createSoftRadialTexture(
+        'rgba(55, 68, 62, 0.75)',
+        'rgba(24, 30, 27, 0.48)',
+        'rgba(10, 12, 11, 0)'
+      );
+      smokeSystem = { puffs: [] };
+      for (let s = 0; s < 20; s++) {
+        const sMat = new THREE.SpriteMaterial({
+          map: smokeTex,
+          color: 0x202b25,
+          transparent: true,
+          opacity: 0.0,
+          depthWrite: false
+        });
+        const sSprite = new THREE.Sprite(sMat);
+        sSprite.visible = false;
+        engineGroup.add(sSprite);
+
+        const ang = Math.random() * Math.PI * 2;
+        const spread = 0.8 + Math.random() * 2.2;
+        smokeSystem.puffs.push({
+          sprite: sSprite,
+          vel: new THREE.Vector3(
+            Math.cos(ang) * spread,
+            1.4 + Math.random() * 2.5,
+            Math.sin(ang) * spread
+          ),
+          startScale: 1.15 + Math.random() * 0.9,
+          growRate: 2.0 + Math.random() * 1.6
+        });
+      }
+    }
+
+    function buildDetailedV12Scene() {
+      try {
+        if (!window.THREE || !canvas) return false;
+        renderer = new THREE.WebGLRenderer({
+          canvas,
+          antialias: true,
+          powerPreference: 'high-performance'
+        });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.18;
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x060908);
+        scene.fog = new THREE.FogExp2(0x060908, 0.02);
+
+        const w = canvasContainer.clientWidth || 360;
+        const h = canvasContainer.clientHeight || 420;
+        camera = new THREE.PerspectiveCamera(35, w / h, 0.1, 100);
+
+        // Lighting: studio key, mint rim, warm fill, and platform underglow
+        const ambientLight = new THREE.AmbientLight(0xc2dcd0, 0.65);
+        scene.add(ambientLight);
+
+        const keyLight = new THREE.DirectionalLight(0xf8fafc, 1.75);
+        keyLight.position.set(-6.5, 11.0, 7.5);
+        scene.add(keyLight);
+
+        const mintRimLight = new THREE.DirectionalLight(0x38e58d, 1.35);
+        mintRimLight.position.set(7.5, 4.8, -6.2);
+        scene.add(mintRimLight);
+
+        const frontFillLight = new THREE.DirectionalLight(0x94a3b8, 0.78);
+        frontFillLight.position.set(4.5, 5.5, 8.0);
+        scene.add(frontFillLight);
+
+        platformLight = new THREE.PointLight(0x38e58d, 1.55, 10.5);
+        platformLight.position.set(0, -1.25, 0);
+        scene.add(platformLight);
+
+        rootGroup = new THREE.Group();
+        scene.add(rootGroup);
+
+        // Semi-transparent glass platform with crisp neon-green border & subtle grid
+        const plateGroup = new THREE.Group();
+        plateGroup.position.set(0, -1.52, 0);
+        rootGroup.add(plateGroup);
+
+        const plateW = 4.6;
+        const plateD = 7.6;
+        const plateGeo = new THREE.BoxGeometry(plateW, 0.08, plateD);
+        const plateGlassMat = new THREE.MeshPhysicalMaterial({
+          color: 0x10261d,
+          transparent: true,
+          opacity: 0.58,
+          roughness: 0.14,
+          metalness: 0.22,
+          clearcoat: 1.0,
+          clearcoatRoughness: 0.08
+        });
+        const plateMesh = new THREE.Mesh(plateGeo, plateGlassMat);
+        plateGroup.add(plateMesh);
+
+        const gridHelper = new THREE.GridHelper(plateW, 12, 0x38e58d, 0x143b2b);
+        gridHelper.position.y = 0.044;
+        gridHelper.scale.z = plateD / plateW;
+        plateGroup.add(gridHelper);
+
+        const rimGeo = new THREE.EdgesGeometry(plateGeo);
+        const rimMat = new THREE.LineBasicMaterial({ color: 0x72f5b0 });
+        plateGroup.add(new THREE.LineSegments(rimGeo, rimMat));
+
+        const outerRimGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(plateW + 0.06, 0.095, plateD + 0.06));
+        const outerRimMat = new THREE.LineBasicMaterial({
+          color: 0x38e58d,
+          transparent: true,
+          opacity: 0.65
+        });
+        plateGroup.add(new THREE.LineSegments(outerRimGeo, outerRimMat));
+
+        // Shockwave ring for 1000 KM/H explosion
+        const ringGeo = new THREE.RingGeometry(0.45, 0.72, 48);
+        ringGeo.rotateX(-Math.PI / 2);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: 0x72f5b0,
+          transparent: true,
+          opacity: 0.0,
+          side: THREE.DoubleSide
+        });
+        shockwaveRing = new THREE.Mesh(ringGeo, ringMat);
+        shockwaveRing.position.set(0, -1.42, 0);
+        shockwaveRing.visible = false;
+        rootGroup.add(shockwaveRing);
+
+        // Rich PBR Materials for Cast Aluminum, Semi-Transparent Glass, Chrome, Titanium & Exhaust
+        const castAluminumMat = new THREE.MeshStandardMaterial({
+          color: 0x6b7785,
+          metalness: 0.84,
+          roughness: 0.34
+        });
+
+        const ribAluminumMat = new THREE.MeshStandardMaterial({
+          color: 0x8b99a8,
+          metalness: 0.88,
+          roughness: 0.26
+        });
+
+        const semiTransparentHousingMat = new THREE.MeshPhysicalMaterial({
+          color: 0x8ea3ad,
+          metalness: 0.42,
+          roughness: 0.16,
+          transparent: true,
+          opacity: 0.24,
+          depthWrite: false,
+          clearcoat: 0.9,
+          side: THREE.DoubleSide
+        });
+
+        const tintedCoverMat = new THREE.MeshPhysicalMaterial({
+          color: 0x748a94,
+          metalness: 0.48,
+          roughness: 0.16,
+          transparent: true,
+          opacity: 0.27,
+          depthWrite: false,
+          clearcoat: 0.92,
+          side: THREE.DoubleSide
+        });
+
+        const chromeMat = new THREE.MeshStandardMaterial({
+          color: 0xe5e7eb,
+          metalness: 0.95,
+          roughness: 0.13
+        });
+
+        const titaniumMat = new THREE.MeshStandardMaterial({
+          color: 0x9ca3af,
+          metalness: 0.9,
+          roughness: 0.22
+        });
+
+        const springGoldMat = new THREE.MeshStandardMaterial({
+          color: 0xd4af37,
+          metalness: 0.88,
+          roughness: 0.24
+        });
+
+        const darkAlloyMat = new THREE.MeshStandardMaterial({
+          color: 0x1f2529,
+          metalness: 0.76,
+          roughness: 0.4
+        });
+
+        const beltMat = new THREE.MeshStandardMaterial({
+          color: 0x121517,
+          metalness: 0.12,
+          roughness: 0.84
+        });
+
+        headerMaterial = new THREE.MeshStandardMaterial({
+          color: 0x7a6c5d,
+          emissive: 0xff2600,
+          emissiveIntensity: 0.0,
+          metalness: 0.86,
+          roughness: 0.25
+        });
+
+        engineGroup = new THREE.Group();
+        engineGroup.position.set(0, 0.18, 0);
+        rootGroup.add(engineGroup);
+
+        const cylPerBank = 6; // V12 = 6 cylinders per bank x 2 banks
+        const spacing = 0.68;
+        const bankLength = cylPerBank * spacing + 0.8;
+        const vAngle = THREE.MathUtils.degToRad(32);
+
+        // 1. Engine Mount Cradle & Structural Legs on Platform
+        const legGeo = new THREE.BoxGeometry(0.16, 1.18, 0.24);
+        [-1, 1].forEach(sideX => {
+          [-bankLength * 0.32, bankLength * 0.32].forEach(posZ => {
+            const leg = new THREE.Mesh(legGeo, castAluminumMat);
+            leg.position.set(sideX * 0.84, -1.04, posZ);
+            leg.rotation.z = sideX * -0.15;
+            engineGroup.add(leg);
+            registerDebris(leg, 0.75);
+
+            const foot = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.08, 0.38), darkAlloyMat);
+            foot.position.set(sideX * 0.91, -1.61, posZ);
+            engineGroup.add(foot);
+            registerDebris(foot, 0.65);
+          });
+        });
+
+        // 2. V12 Crankcase, Structural Ribs, Oil Sump, Crankshaft & Flywheel
+        const crankGroup = new THREE.Group();
+        engineGroup.add(crankGroup);
+
+        // Cast aluminum crankcase base + structural stiffening ribs
+        const crankcaseBase = new THREE.Mesh(
+          new THREE.BoxGeometry(1.42, 0.56, bankLength),
+          castAluminumMat
+        );
+        crankcaseBase.position.set(0, -0.38, 0);
+        crankGroup.add(crankcaseBase);
+        registerDebris(crankcaseBase, 0.85);
+
+        for (let r = -3; r <= 3; r++) {
+          const rib = new THREE.Mesh(
+            new THREE.BoxGeometry(1.48, 0.06, 0.08),
+            ribAluminumMat
+          );
+          rib.position.set(0, -0.44, r * 0.62);
+          crankGroup.add(rib);
+          registerDebris(rib, 0.95);
+        }
+
+        // Semi-transparent lower sump shroud so crank & counterweights stay visible
+        const sumpGlass = new THREE.Mesh(
+          new THREE.BoxGeometry(1.36, 0.44, bankLength * 0.98),
+          semiTransparentHousingMat
+        );
+        sumpGlass.position.set(0, -0.66, 0);
+        crankGroup.add(sumpGlass);
+        registerDebris(sumpGlass, 0.9);
+
+        const sumpBottomPan = new THREE.Mesh(
+          new THREE.BoxGeometry(1.30, 0.1, bankLength * 0.95),
+          darkAlloyMat
+        );
+        sumpBottomPan.position.set(0, -0.88, 0);
+        crankGroup.add(sumpBottomPan);
+        registerDebris(sumpBottomPan, 0.8);
+
+        // Forged crankshaft main journal shaft
+        const shaftGeo = new THREE.CylinderGeometry(0.16, 0.16, bankLength + 0.86, 24);
+        shaftGeo.rotateX(Math.PI / 2);
+        const crankShaft = new THREE.Mesh(shaftGeo, chromeMat);
+        crankGroup.add(crankShaft);
+        registerDebris(crankShaft, 0.9);
+
+        // Rear flywheel disc
+        const flywheel = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.78, 0.78, 0.14, 32).rotateX(Math.PI / 2),
+          titaniumMat
+        );
+        flywheel.position.set(0, 0, -bankLength * 0.5 - 0.24);
+        crankGroup.add(flywheel);
+        registerDebris(flywheel, 1.15);
+
+        // 3. Left & Right V12 Cylinder Banks (DOHC Twin-Camshafts, Cam Lobes, Valve Springs, 12 Pistons & Rods)
+        [-1, 1].forEach(bankSign => {
+          const bankGroup = new THREE.Group();
+          bankGroup.rotation.z = bankSign * vAngle;
+          engineGroup.add(bankGroup);
+
+          // Cast aluminum lower block skirt with structural ribs
+          const lowerSkirt = new THREE.Mesh(
+            new THREE.BoxGeometry(0.92, 0.46, bankLength),
+            castAluminumMat
+          );
+          lowerSkirt.position.set(0, 0.34, 0);
+          bankGroup.add(lowerSkirt);
+          registerDebris(lowerSkirt, 1.0);
+
+          for (let bRib = 0; bRib < 5; bRib++) {
+            const zRib = (bRib - 2) * 0.82;
+            const bankRib = new THREE.Mesh(
+              new THREE.BoxGeometry(0.97, 0.05, 0.07),
+              ribAluminumMat
+            );
+            bankRib.position.set(0, 0.42, zRib);
+            bankGroup.add(bankRib);
+            registerDebris(bankRib, 1.05);
+          }
+
+          // Semi-transparent upper cylinder block & head housing
+          const upperBlockGlass = new THREE.Mesh(
+            new THREE.BoxGeometry(0.88, 0.92, bankLength),
+            semiTransparentHousingMat
+          );
+          upperBlockGlass.position.set(0, 1.04, 0);
+          bankGroup.add(upperBlockGlass);
+          registerDebris(upperBlockGlass, 1.15);
+
+          // Semi-transparent ribbed DOHC valve cover
+          const valveCoverGlass = new THREE.Mesh(
+            new THREE.BoxGeometry(1.0, 0.44, bankLength + 0.12),
+            tintedCoverMat
+          );
+          valveCoverGlass.position.set(0, 1.76, 0);
+          bankGroup.add(valveCoverGlass);
+          registerDebris(valveCoverGlass, 1.3);
+
+          for (let vcRib = -3; vcRib <= 3; vcRib++) {
+            const coverRib = new THREE.Mesh(
+              new THREE.BoxGeometry(1.03, 0.035, 0.06),
+              ribAluminumMat
+            );
+            coverRib.position.set(0, 1.97, vcRib * 0.62);
+            bankGroup.add(coverRib);
+            registerDebris(coverRib, 1.35);
+          }
+
+          // Twin Overhead Camshafts (DOHC) with Cam Lobes & Valve Springs
+          [-0.23, 0.23].forEach((camX, camIdx) => {
+            const camGroup = new THREE.Group();
+            camGroup.position.set(camX, 1.78, 0.08);
+            bankGroup.add(camGroup);
+
+            const camRod = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.058, 0.058, bankLength + 0.36, 16).rotateX(Math.PI / 2),
+              chromeMat
+            );
+            camGroup.add(camRod);
+
+            for (let c = 0; c < cylPerBank; c++) {
+              const zLobe = (c - (cylPerBank - 1) / 2) * spacing - 0.08;
+              const lobe = new THREE.Mesh(
+                new THREE.BoxGeometry(0.13, 0.22, 0.075),
+                titaniumMat
+              );
+              lobe.position.set(0, 0, zLobe);
+              lobe.rotation.z = c * 0.85 + camIdx * 0.65;
+              camGroup.add(lobe);
+
+              // Valve spring beneath each cam lobe
+              const spring = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.065, 0.065, 0.19, 12),
+                springGoldMat
+              );
+              spring.position.set(camX, 1.62, zLobe);
+              bankGroup.add(spring);
+              valveSprings.push({
+                mesh: spring,
+                baseY: 1.62,
+                phase: c * 0.85 + camIdx * 0.65
+              });
+              registerDebris(spring, 1.25);
+            }
+
+            camshafts.push(camGroup);
+            registerDebris(camGroup, 1.35);
+          });
+
+          // 6 Pistons (with rings & wrist pins), Connecting Rods, Crank Counterweights & Combustion Glow
+          for (let i = 0; i < cylPerBank; i++) {
+            const zPos = (i - (cylPerBank - 1) / 2) * spacing + (bankSign > 0 ? 0.10 : -0.10);
+            const phase = (i * (Math.PI * 2 / cylPerBank)) + (bankSign > 0 ? Math.PI / 3 : 0);
+
+            // Crankshaft counterweight & rod journal pin
+            const cwGroup = new THREE.Group();
+            cwGroup.position.set(0, 0, zPos);
+            crankGroup.add(cwGroup);
+
+            const cwBlade = new THREE.Mesh(
+              new THREE.BoxGeometry(0.27, 0.58, 0.12),
+              castAluminumMat
+            );
+            cwGroup.add(cwBlade);
+
+            const journalPin = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.075, 0.075, 0.20, 14).rotateX(Math.PI / 2),
+              chromeMat
+            );
+            journalPin.position.set(0, 0.22, 0);
+            cwGroup.add(journalPin);
+
+            // Piston assembly with compression ring & wrist pin
+            const pistonGroup = new THREE.Group();
+            pistonGroup.position.set(0, 0.92, zPos);
+            bankGroup.add(pistonGroup);
+
+            const pistonCrown = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.265, 0.265, 0.28, 22),
+              chromeMat
+            );
+            pistonGroup.add(pistonCrown);
+
+            const compRing = new THREE.Mesh(
+              new THREE.TorusGeometry(0.267, 0.011, 8, 22).rotateX(Math.PI / 2),
+              darkAlloyMat
+            );
+            compRing.position.y = 0.08;
+            pistonGroup.add(compRing);
+
+            const wristPin = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.048, 0.048, 0.44, 12).rotateX(Math.PI / 2),
+              titaniumMat
+            );
+            wristPin.position.y = -0.04;
+            pistonGroup.add(wristPin);
+
+            registerDebris(pistonGroup, 1.45);
+
+            // Forged connecting rod
+            const conRod = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.048, 0.074, 0.82, 12),
+              titaniumMat
+            );
+            conRod.position.set(0, 0.48, zPos);
+            bankGroup.add(conRod);
+            registerDebris(conRod, 1.25);
+
+            // Combustion chamber plasma flash
+            const glowMat = new THREE.MeshBasicMaterial({
+              color: 0x38e58d,
+              transparent: true,
+              opacity: 0.0
+            });
+            const glowMesh = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.25, 0.25, 0.20, 18),
+              glowMat
+            );
+            glowMesh.position.set(0, 1.36, zPos);
+            bankGroup.add(glowMesh);
+
+            cylinders.push({
+              piston: pistonGroup,
+              conRod,
+              glow: glowMesh,
+              cw: cwGroup,
+              phase,
+              baseY: 0.92
+            });
+          }
+        });
+
+        // 4. Twin Intake Plenums, Runners & Twin Turbochargers
+        [-0.36, 0.36].forEach((plenumX, sideIdx) => {
+          const plenum = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.20, 0.22, bankLength * 0.88, 20).rotateX(Math.PI / 2),
+            tintedCoverMat
+          );
+          plenum.position.set(plenumX, 2.22, -0.04);
+          engineGroup.add(plenum);
+          registerDebris(plenum, 1.35);
+
+          // Individual intake runners
+          for (let r = 0; r < cylPerBank; r++) {
+            const zRun = (r - (cylPerBank - 1) / 2) * spacing;
+            const runner = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.062, 0.068, 0.56, 12),
+              ribAluminumMat
+            );
+            runner.position.set(plenumX, 1.94, zRun);
+            runner.rotation.z = (plenumX < 0 ? 1 : -1) * 0.24;
+            engineGroup.add(runner);
+            registerDebris(runner, 1.3);
+          }
+
+          // Twin Turbocharger Snail Housing & Spinning Compressor Impeller
+          const turboX = plenumX * 3.55;
+          const turboZ = -bankLength * 0.34;
+          const snailHousing = new THREE.Mesh(
+            new THREE.TorusGeometry(0.24, 0.11, 14, 24),
+            ribAluminumMat
+          );
+          snailHousing.position.set(turboX, 0.78, turboZ);
+          snailHousing.rotation.y = (sideIdx === 0 ? 1 : -1) * 0.45;
+          engineGroup.add(snailHousing);
+          registerDebris(snailHousing, 1.45);
+
+          const impellerGroup = new THREE.Group();
+          impellerGroup.position.set(turboX, 0.78, turboZ + 0.08);
+          for (let b = 0; b < 5; b++) {
+            const blade = new THREE.Mesh(
+              new THREE.BoxGeometry(0.26, 0.04, 0.05),
+              chromeMat
+            );
+            blade.rotation.z = (b * Math.PI * 2) / 5;
+            impellerGroup.add(blade);
+          }
+          engineGroup.add(impellerGroup);
+          turboImpellers.push(impellerGroup);
+          registerDebris(impellerGroup, 1.5);
+        });
+
+        // 5. Front Timing Gear Pulleys & Serpentine Belt
+        const frontDriveGroup = new THREE.Group();
+        frontDriveGroup.position.set(0, 0, bankLength * 0.5 + 0.22);
+        engineGroup.add(frontDriveGroup);
+
+        const pulleySpecs = [
+          { x: 0, y: 0, r: 0.38, w: 0.28, mat: chromeMat, rate: 1.0 },
+          { x: -0.78, y: 1.44, r: 0.31, w: 0.14, mat: titaniumMat, rate: 0.5 },
+          { x: -1.12, y: 1.24, r: 0.28, w: 0.14, mat: castAluminumMat, rate: 0.5 },
+          { x: 0.78, y: 1.44, r: 0.31, w: 0.14, mat: titaniumMat, rate: 0.5 },
+          { x: 1.12, y: 1.24, r: 0.28, w: 0.14, mat: castAluminumMat, rate: 0.5 },
+          { x: 0, y: 0.74, r: 0.22, w: 0.16, mat: chromeMat, rate: -0.75 }
+        ];
+
+        pulleySpecs.forEach(sp => {
+          const gearMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(sp.r, sp.r, sp.w, 26).rotateX(Math.PI / 2),
+            sp.mat
+          );
+          gearMesh.position.set(sp.x, sp.y, 0);
+
+          for (let s = 0; s < 3; s++) {
+            const spoke = new THREE.Mesh(
+              new THREE.BoxGeometry(sp.r * 1.72, 0.042, sp.w + 0.02),
+              darkAlloyMat
+            );
+            spoke.rotation.z = (s * Math.PI) / 3;
+            gearMesh.add(spoke);
+          }
+
+          const hubNut = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.06, 0.06, sp.w + 0.05, 6).rotateX(Math.PI / 2),
+            chromeMat
+          );
+          gearMesh.add(hubNut);
+
+          frontDriveGroup.add(gearMesh);
+          camGears.push({ mesh: gearMesh, rate: sp.rate });
+          registerDebris(gearMesh, 1.4);
+        });
+
+        const beltCurvePts = [
+          new THREE.Vector3(0, -0.38, 0),
+          new THREE.Vector3(-1.38, 1.24, 0),
+          new THREE.Vector3(-0.78, 1.75, 0),
+          new THREE.Vector3(0, 0.96, 0),
+          new THREE.Vector3(0.78, 1.75, 0),
+          new THREE.Vector3(1.38, 1.24, 0),
+          new THREE.Vector3(0.38, 0, 0),
+          new THREE.Vector3(0, -0.38, 0)
+        ];
+        const beltCurve = new THREE.CatmullRomCurve3(beltCurvePts);
+        const beltGeo = new THREE.TubeGeometry(beltCurve, 80, 0.032, 8, true);
+        const beltMesh = new THREE.Mesh(beltGeo, beltMat);
+        frontDriveGroup.add(beltMesh);
+        registerDebris(beltMesh, 1.25);
+
+        // 6. Curved Multi-Branch Exhaust Headers (Progressively Glow Hot under Load/RPM)
+        [-1, 1].forEach(sideX => {
+          const collectorZ = -bankLength * 0.48;
+          const collectorPt = new THREE.Vector3(sideX * 1.28, 0.48, collectorZ);
+
+          for (let i = 0; i < cylPerBank; i++) {
+            const zPort = (i - (cylPerBank - 1) / 2) * spacing;
+            const p0 = new THREE.Vector3(sideX * 0.88, 1.14, zPort);
+            const p1 = new THREE.Vector3(sideX * 1.42, 1.08, zPort - 0.1);
+            const p2 = new THREE.Vector3(sideX * 1.38, 0.68, (zPort + collectorZ) * 0.5);
+            const p3 = new THREE.Vector3(collectorPt.x, collectorPt.y, collectorPt.z);
+
+            const runnerCurve = new THREE.CatmullRomCurve3([p0, p1, p2, p3]);
+            const runnerGeo = new THREE.TubeGeometry(runnerCurve, 22, 0.066, 10, false);
+            const runnerMesh = new THREE.Mesh(runnerGeo, headerMaterial);
+            engineGroup.add(runnerMesh);
+            registerDebris(runnerMesh, 1.25);
+          }
+        });
+
+        buildExplosionEffects();
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    hasWebGL = buildDetailedV12Scene();
+
+    // 2D Canvas Fallback Renderer when WebGL is unavailable
+    const fallback2D = {
+      ctx: null,
+      debris: [],
+      smoke: [],
+      sparks: []
+    };
+
+    if (!hasWebGL && canvas) {
+      try {
+        fallback2D.ctx = canvas.getContext('2d');
+      } catch (e) {
+        fallback2D.ctx = null;
+      }
+    }
+
+    function create2DFallbackExplosion(cx, cy) {
+      fallback2D.debris = [];
+      fallback2D.smoke = [];
+      fallback2D.sparks = [];
+
+      for (let i = 0; i < 48; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const spd = 100 + Math.random() * 320;
+        fallback2D.debris.push({
+          x: cx,
+          y: cy - 10,
+          vx: Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd - 130,
+          w: 8 + Math.random() * 14,
+          h: 6 + Math.random() * 10,
+          rot: Math.random() * Math.PI * 2,
+          vRot: (Math.random() - 0.5) * 14,
+          color: i % 3 === 0 ? '#72f5b0' : (i % 2 === 0 ? '#f97316' : '#9ca3af')
+        });
+      }
+
+      for (let s = 0; s < 22; s++) {
+        const ang = Math.random() * Math.PI * 2;
+        const spd = 25 + Math.random() * 90;
+        fallback2D.smoke.push({
+          x: cx + (Math.random() - 0.5) * 35,
+          y: cy - 8 + (Math.random() - 0.5) * 20,
+          vx: Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd - 55,
+          r: 18 + Math.random() * 22,
+          grow: 26 + Math.random() * 24,
+          alpha: 0.7
+        });
+      }
+
+      for (let k = 0; k < 55; k++) {
+        const ang = Math.random() * Math.PI * 2;
+        const spd = 120 + Math.random() * 380;
+        fallback2D.sparks.push({
+          x: cx,
+          y: cy - 12,
+          vx: Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd - 140,
+          life: 1.0,
+          color: k % 2 === 0 ? '#fbbf24' : '#ef4444'
+        });
+      }
+    }
+
+    function renderFallback2D(dt, sx, sy) {
+      const ctx = fallback2D.ctx;
+      if (!ctx) return;
+      const w = canvas.width || 360;
+      const h = canvas.height || 400;
+      const cx = w * 0.5 + sx * 90;
+      const cy = h * 0.52 + sy * 90;
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = '#060908';
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.save();
+      ctx.strokeStyle = state.exploded ? '#ef4444' : '#38e58d';
+      ctx.lineWidth = 2.5;
+      ctx.fillStyle = 'rgba(16, 38, 29, 0.58)';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + 16);
+      ctx.lineTo(cx + 128, cy + 70);
+      ctx.lineTo(cx, cy + 124);
+      ctx.lineTo(cx - 128, cy + 70);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      if (!state.exploded) {
+        ctx.fillStyle = 'rgba(142, 163, 173, 0.25)';
+        ctx.strokeStyle = '#72f5b0';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(cx - 76, cy - 62, 152, 100, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        for (let i = -2; i <= 2; i++) {
+          const pOff = Math.sin(state.crankAngle + i * 0.9) * 14;
+          ctx.fillStyle = '#e5e7eb';
+          ctx.fillRect(cx + i * 24 - 5, cy - 30 + pOff, 10, 26);
+        }
+      } else {
+        if (state.explosionElapsed < 0.85) {
+          const blastRadius = 24 + state.explosionElapsed * 175;
+          const blastAlpha = Math.max(0, 1 - state.explosionElapsed / 0.85);
+          const grad = ctx.createRadialGradient(cx, cy - 10, 4, cx, cy - 10, blastRadius);
+          grad.addColorStop(0, `rgba(255, 248, 220, ${blastAlpha * 0.9})`);
+          grad.addColorStop(0.5, `rgba(251, 146, 60, ${blastAlpha * 0.65})`);
+          grad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(cx, cy - 10, blastRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        fallback2D.smoke.forEach(s => {
+          s.x += s.vx * dt;
+          s.y += s.vy * dt;
+          s.r += s.grow * dt;
+          s.alpha = Math.max(0, s.alpha - dt * 0.24);
+          if (s.alpha > 0.01) {
+            ctx.fillStyle = `rgba(34, 42, 38, ${s.alpha})`;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+
+        fallback2D.debris.forEach(d => {
+          d.vy += 460 * dt;
+          d.x += d.vx * dt;
+          d.y += d.vy * dt;
+          d.rot += d.vRot * dt;
+          if (d.y > cy + 68) {
+            d.y = cy + 68;
+            d.vy = -Math.abs(d.vy) * 0.35;
+            d.vx *= 0.72;
+          }
+          ctx.save();
+          ctx.translate(d.x, d.y);
+          ctx.rotate(d.rot);
+          ctx.fillStyle = d.color;
+          ctx.fillRect(-d.w * 0.5, -d.h * 0.5, d.w, d.h);
+          ctx.restore();
+        });
+
+        fallback2D.sparks.forEach(sp => {
+          sp.vy += 380 * dt;
+          sp.x += sp.vx * dt;
+          sp.y += sp.vy * dt;
+          sp.life = Math.max(0, sp.life - dt * 1.1);
+          if (sp.life > 0.02) {
+            ctx.globalAlpha = sp.life;
+            ctx.fillStyle = sp.color;
+            ctx.fillRect(sp.x - 2, sp.y - 2, 4, 4);
+            ctx.globalAlpha = 1;
+          }
+        });
+      }
+      ctx.restore();
+    }
+
+    /**
+     * =========================================================================
+     * 4. CAMERA ORBIT & ZOOM + EXPLOSION / REBUILD LOGIC
+     * =========================================================================
+     */
+    function applyCameraShakeAndOrbit(sx = 0, sy = 0) {
+      if (!hasWebGL || !camera) return;
+      const { radius, theta, phi } = camSpherical;
+      camera.position.x = radius * Math.sin(phi) * Math.sin(theta) + sx;
+      camera.position.y = radius * Math.cos(phi) + 0.32 + sy;
+      camera.position.z = radius * Math.sin(phi) * Math.cos(theta);
+      camera.lookAt(sx * 0.45, 0.16 + sy * 0.45, 0);
+    }
+
+    const pointers = new Map();
+    let prevPinchDist = null;
+    let isOrbiting = false;
+
+    canvasContainer.addEventListener('pointerdown', (e) => {
+      if (state.audioEnabled) audioSynth.startOnGesture();
+      isOrbiting = true;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      canvasContainer.setPointerCapture(e.pointerId);
+    });
+
+    canvasContainer.addEventListener('pointermove', (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      const prev = pointers.get(e.pointerId);
+      const curr = { x: e.clientX, y: e.clientY };
+
+      if (pointers.size === 1) {
+        const dx = curr.x - prev.x;
+        const dy = curr.y - prev.y;
+        camSpherical.theta -= dx * 0.0085;
+        camSpherical.phi = THREE.MathUtils.clamp(camSpherical.phi - dy * 0.0085, 0.35, 1.50);
+        applyCameraShakeAndOrbit();
+      } else if (pointers.size === 2) {
+        pointers.set(e.pointerId, curr);
+        const pts = Array.from(pointers.values());
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        if (prevPinchDist !== null) {
+          const delta = prevPinchDist - dist;
+          camSpherical.radius = THREE.MathUtils.clamp(camSpherical.radius + delta * 0.025, 6.2, 18.0);
+          applyCameraShakeAndOrbit();
+        }
+        prevPinchDist = dist;
+        return;
+      }
+
+      pointers.set(e.pointerId, curr);
+    });
+
+    function clearPointer(e) {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) {
+        prevPinchDist = null;
+      }
+      if (pointers.size === 0) {
+        isOrbiting = false;
+      }
+    }
+
+    canvasContainer.addEventListener('pointerup', clearPointer);
+    canvasContainer.addEventListener('pointercancel', clearPointer);
+
+    canvasContainer.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      if (state.audioEnabled) audioSynth.startOnGesture();
+      camSpherical.radius = THREE.MathUtils.clamp(camSpherical.radius + e.deltaY * 0.008, 6.2, 18.0);
+      applyCameraShakeAndOrbit();
+    }, { passive: false });
+
+    function resizeViewport() {
+      const w = canvasContainer.clientWidth || 360;
+      const h = canvasContainer.clientHeight || 420;
+      if (hasWebGL && camera && renderer) {
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      } else if (canvas) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+    }
+    window.addEventListener('resize', resizeViewport);
+
+    function triggerExplosion() {
+      if (state.exploded) return;
+      state.exploded = true;
+      state.explosionElapsed = 0;
+      state.gasPct = 0;
+      state.brakePct = 0;
+      state.turboBoost = 0;
+      holdingGas = false;
+      holdingBrake = false;
+      slidingGas = false;
+      slidingBrake = false;
+
+      updatePedalsUI();
+      updateStatusUI();
+
+      explosionFlash.classList.remove('blast-flash-anim');
+      void explosionFlash.offsetWidth;
+      explosionFlash.classList.add('blast-flash-anim');
+
+      audioSynth.playExplosion();
+
+      const w = canvas.width || 360;
+      const h = canvas.height || 400;
+      create2DFallbackExplosion(w * 0.5, h * 0.52);
+
+      if (hasWebGL) {
+        if (shockwaveRing) {
+          shockwaveRing.visible = true;
+          shockwaveRing.scale.set(0.35, 0.35, 0.35);
+          shockwaveRing.material.opacity = 0.95;
+        }
+
+        debrisList.forEach(part => {
+          const worldPos = new THREE.Vector3();
+          part.getWorldPosition(worldPos);
+          const dir = worldPos.clone().sub(new THREE.Vector3(0, 0.35, 0));
+          if (dir.lengthSq() < 0.001) {
+            dir.set((Math.random() - 0.5), 1, (Math.random() - 0.5));
+          }
+          dir.normalize();
+
+          const spd = (3.8 + Math.random() * 5.6) * (part.userData.factor || 1.0);
+          part.userData.vel.set(
+            dir.x * spd + (Math.random() - 0.5) * 2.4,
+            Math.max(2.6, dir.y * spd + 2.8 + Math.random() * 2.5),
+            dir.z * spd + (Math.random() - 0.5) * 2.4
+          );
+          part.userData.rotVel.set(
+            (Math.random() - 0.5) * 15,
+            (Math.random() - 0.5) * 15,
+            (Math.random() - 0.5) * 15
+          );
+        });
+
+        if (burstSystem) {
+          burstSystem.points.visible = true;
+          burstSystem.mat.opacity = 1.0;
+          const posAttr = burstSystem.geo.getAttribute('position');
+          for (let i = 0; i < burstSystem.velocities.length; i++) {
+            posAttr.setXYZ(
+              i,
+              (Math.random() - 0.5) * 0.65,
+              0.35 + (Math.random() - 0.5) * 0.5,
+              (Math.random() - 0.5) * 0.65
+            );
+          }
+          posAttr.needsUpdate = true;
+        }
+
+        if (fireballSystem) {
+          fireballSystem.puffs.forEach(puff => {
+            puff.sprite.visible = true;
+            puff.sprite.position.set(
+              (Math.random() - 0.5) * 0.7,
+              0.35 + (Math.random() - 0.5) * 0.5,
+              (Math.random() - 0.5) * 0.7
+            );
+            puff.sprite.scale.set(puff.startScale, puff.startScale, 1);
+            puff.sprite.material.opacity = 0.92;
+          });
+        }
+
+        if (smokeSystem) {
+          smokeSystem.puffs.forEach(puff => {
+            puff.sprite.visible = true;
+            puff.sprite.position.set(
+              (Math.random() - 0.5) * 1.1,
+              0.25 + (Math.random() - 0.5) * 0.4,
+              (Math.random() - 0.5) * 1.1
+            );
+            puff.sprite.scale.set(puff.startScale, puff.startScale, 1);
+            puff.sprite.material.opacity = 0.7;
+          });
+        }
+      }
+    }
+
+    function rebuildEngine() {
+      state.exploded = false;
+      state.explosionElapsed = 0;
+      state.rpm = IDLE_RPM;
+      state.speedKmh = 0;
+      state.gasPct = 0;
+      state.brakePct = 0;
+      state.turboBoost = 0;
+      state.crankAngle = 0;
+      holdingGas = false;
+      holdingBrake = false;
+      slidingGas = false;
+      slidingBrake = false;
+      fallback2D.debris = [];
+      fallback2D.smoke = [];
+      fallback2D.sparks = [];
+
+      if (hasWebGL) {
+        if (headerMaterial) {
+          headerMaterial.emissiveIntensity = 0;
+          headerMaterial.emissive.setHex(0xff2600);
+        }
+        if (platformLight) {
+          platformLight.color.setHex(0x38e58d);
+          platformLight.intensity = 1.55;
+        }
+        if (shockwaveRing) {
+          shockwaveRing.visible = false;
+          shockwaveRing.scale.set(1, 1, 1);
+          shockwaveRing.material.opacity = 0;
+        }
+
+        debrisList.forEach(part => {
+          part.position.copy(part.userData.origPos);
+          part.rotation.copy(part.userData.origRot);
+          part.scale.copy(part.userData.origScale);
+          part.userData.vel.set(0, 0, 0);
+          part.userData.rotVel.set(0, 0, 0);
+        });
+
+        if (burstSystem) {
+          burstSystem.points.visible = false;
+          burstSystem.mat.opacity = 0;
+        }
+        if (fireballSystem) {
+          fireballSystem.puffs.forEach(puff => {
+            puff.sprite.visible = false;
+            puff.sprite.material.opacity = 0;
+          });
+        }
+        if (smokeSystem) {
+          smokeSystem.puffs.forEach(puff => {
+            puff.sprite.visible = false;
+            puff.sprite.material.opacity = 0;
+          });
+        }
+      }
+
+      updatePedalsUI();
+      updateStatusUI();
+      if (state.audioEnabled) {
+        audioSynth.startOnGesture();
+      }
+    }
+
+    btnRebuild.addEventListener('click', (e) => {
+      e.stopPropagation();
+      rebuildEngine();
+    });
+
+    /**
+     * =========================================================================
+     * 5. PEDAL & KEYBOARD CONTROLS (FREIN & GAZ ONLY)
+     * =========================================================================
+     */
+    function bindPedal(el, isGas) {
+      const calcVerticalPct = (clientY) => {
+        const rect = el.getBoundingClientRect();
+        if (!rect.height) return 100;
+        const ratio = 1 - ((clientY - rect.top) / rect.height);
+        return THREE.MathUtils.clamp(Math.round(ratio * 115), 25, 100);
+      };
+
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (state.audioEnabled) audioSynth.startOnGesture();
+        if (isGas && state.exploded) return;
+
+        if (isGas) {
+          holdingGas = true;
+          slidingGas = false;
+        } else {
+          holdingBrake = true;
+          slidingBrake = false;
+        }
+        updatePedalsUI();
+        el.setPointerCapture(e.pointerId);
+      });
+
+      el.addEventListener('pointermove', (e) => {
+        if (isGas && holdingGas && !state.exploded) {
+          state.gasPct = calcVerticalPct(e.clientY);
+          slidingGas = true;
+          updatePedalsUI();
+        } else if (!isGas && holdingBrake) {
+          state.brakePct = calcVerticalPct(e.clientY);
+          slidingBrake = true;
+          updatePedalsUI();
+        }
+      });
+
+      const onRelease = () => {
+        if (isGas) {
+          holdingGas = false;
+          slidingGas = false;
+        } else {
+          holdingBrake = false;
+          slidingBrake = false;
+        }
+        updatePedalsUI();
+      };
+
+      el.addEventListener('pointerup', onRelease);
+      el.addEventListener('pointercancel', onRelease);
+    }
+
+    bindPedal(pedalGaz, true);
+    bindPedal(pedalFrein, false);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+        if (state.audioEnabled) audioSynth.startOnGesture();
+        if (!state.exploded) {
+          holdingGas = true;
+          updatePedalsUI();
+        }
+      } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+        if (state.audioEnabled) audioSynth.startOnGesture();
+        holdingBrake = true;
+        updatePedalsUI();
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+        holdingGas = false;
+        updatePedalsUI();
+      } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+        holdingBrake = false;
+        updatePedalsUI();
+      }
+    });
+
+    /**
+     * =========================================================================
+     * 6. TURBO AUDI A6 C ACCELERATION, BRAKING, 1000 KM/H EXPLOSION & LOOP
+     * =========================================================================
+     */
+    let prevTime = performance.now();
+    const platformDeckY = -1.32;
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min((now - prevTime) / 1000, 0.05);
+      prevTime = now;
+
+      // Smoothly ramp pedal levels on press/release
+      if (holdingGas && !slidingGas && !state.exploded) {
+        state.gasPct = Math.min(100, state.gasPct + dt * 175);
+        updatePedalsUI();
+      } else if ((!holdingGas || state.exploded) && state.gasPct > 0) {
+        state.gasPct = Math.max(0, state.gasPct - dt * 225);
+        updatePedalsUI();
+      }
+
+      if (holdingBrake && !slidingBrake) {
+        state.brakePct = Math.min(100, state.brakePct + dt * 215);
+        updatePedalsUI();
+      } else if (!holdingBrake && state.brakePct > 0) {
+        state.brakePct = Math.max(0, state.brakePct - dt * 250);
+        updatePedalsUI();
+      }
+
+      const throttleNorm = state.gasPct / 100;
+      const brakeNorm = state.brakePct / 100;
+
+      if (!state.exploded) {
+        // Audi A6 C-generation turbo spool & torque curve (~6s to 100 km/h)
+        // Spools up progressively with throttle & RPM, with realistic aero/drivetrain drag
+        const spoolTarget = throttleNorm > 0.01
+          ? throttleNorm * Math.min(1.45, 0.25 + (state.rpm / 3800) * 1.15)
+          : 0.0;
+        const spoolRate = throttleNorm > 0.01 ? 1.75 : 2.35;
+        state.turboBoost += (spoolTarget - state.turboBoost) * Math.min(1, dt * spoolRate);
+
+        if (throttleNorm > 0.01) {
+          const torqueMultiplier = 0.68 + state.turboBoost * 0.58;
+          const aeroDrag = 1 + Math.pow(state.speedKmh / 640, 1.35) * 0.45;
+          const accelKmhPerSec = (17.0 * throttleNorm * torqueMultiplier) / aeroDrag;
+          state.speedKmh += accelKmhPerSec * dt;
+
+          const rpmClimb = throttleNorm * (1750 + state.turboBoost * 1050) * dt;
+          state.rpm += rpmClimb;
+        } else {
+          // Natural coasting roll-off
+          const coastKmhPerSec = (3.6 + state.speedKmh * 0.018) * dt;
+          state.speedKmh = Math.max(0, state.speedKmh - coastKmhPerSec);
+
+          if (state.rpm > IDLE_RPM) {
+            const rpmFall = (520 + (state.rpm - IDLE_RPM) * 0.35) * dt;
+            state.rpm = Math.max(IDLE_RPM, state.rpm - rpmFall);
+          } else {
+            state.rpm += (IDLE_RPM - state.rpm) * Math.min(1, dt * 3.0);
+          }
+        }
+
+        // Smooth braking with FREIN down to 0 km/h
+        if (brakeNorm > 0.01) {
+          const brakeDecelKmhPerSec = (72 + state.speedKmh * 0.46) * brakeNorm;
+          state.speedKmh = Math.max(0, state.speedKmh - brakeDecelKmhPerSec * dt);
+
+          const rpmBrake = (3200 + state.rpm * 1.9) * brakeNorm * dt;
+          state.rpm = Math.max(0, state.rpm - rpmBrake);
+        }
+
+        if (state.speedKmh <= 0.15 && brakeNorm > 0.25) {
+          state.speedKmh = 0;
+          state.rpm = Math.max(0, state.rpm - 1800 * brakeNorm * dt);
+        } else if (state.speedKmh > 1) {
+          const coupledRpm = IDLE_RPM + (state.speedKmh / 100) * 1820;
+          if (state.rpm < coupledRpm && throttleNorm > 0.01) {
+            state.rpm += (coupledRpm - state.rpm) * Math.min(1, dt * 4.5);
+          }
+        }
+
+        if (state.speedKmh >= EXPLOSION_SPEED) {
+          triggerExplosion();
+        }
+      } else {
+        state.explosionElapsed += dt;
+        state.rpm = Math.max(0, state.rpm - state.rpm * Math.min(1, dt * 12));
+        state.speedKmh = Math.max(0, state.speedKmh - state.speedKmh * Math.min(1, dt * 12));
+        state.turboBoost = Math.max(0, state.turboBoost - dt * 4.0);
+
+        if (hasWebGL) {
+          if (shockwaveRing && shockwaveRing.visible) {
+            const scale = 0.35 + state.explosionElapsed * 15.0;
+            shockwaveRing.scale.set(scale, scale, 1);
+            shockwaveRing.material.opacity = Math.max(0, 0.92 - state.explosionElapsed * 1.1);
+            if (shockwaveRing.material.opacity <= 0.01) {
+              shockwaveRing.visible = false;
+            }
+          }
+
+          const gravity = 14.5;
+          debrisList.forEach(part => {
+            part.userData.vel.y -= gravity * dt;
+            part.position.addScaledVector(part.userData.vel, dt);
+
+            part.rotation.x += part.userData.rotVel.x * dt;
+            part.rotation.y += part.userData.rotVel.y * dt;
+            part.rotation.z += part.userData.rotVel.z * dt;
+
+            if (part.position.y < platformDeckY) {
+              part.position.y = platformDeckY;
+              part.userData.vel.y = Math.abs(part.userData.vel.y) * 0.28;
+              part.userData.vel.x *= 0.72;
+              part.userData.vel.z *= 0.72;
+              part.userData.rotVel.multiplyScalar(0.68);
+            }
+          });
+
+          if (burstSystem && burstSystem.points.visible) {
+            const posAttr = burstSystem.geo.getAttribute('position');
+            for (let i = 0; i < burstSystem.velocities.length; i++) {
+              const v = burstSystem.velocities[i];
+              v.y -= 9.5 * dt;
+              const nx = posAttr.getX(i) + v.x * dt;
+              const ny = Math.max(platformDeckY + 0.1, posAttr.getY(i) + v.y * dt);
+              const nz = posAttr.getZ(i) + v.z * dt;
+              posAttr.setXYZ(i, nx, ny, nz);
+            }
+            posAttr.needsUpdate = true;
+            burstSystem.mat.opacity = Math.max(0, 1.0 - state.explosionElapsed * 0.72);
+            if (burstSystem.mat.opacity <= 0.01) {
+              burstSystem.points.visible = false;
+            }
+          }
+
+          if (fireballSystem) {
+            fireballSystem.puffs.forEach(puff => {
+              if (!puff.sprite.visible) return;
+              puff.sprite.position.addScaledVector(puff.vel, dt);
+              puff.vel.multiplyScalar(Math.max(0, 1 - dt * 1.9));
+              const nextScale = puff.sprite.scale.x + puff.growRate * dt;
+              puff.sprite.scale.set(nextScale, nextScale, 1);
+              puff.sprite.material.opacity = Math.max(0, 0.92 - state.explosionElapsed * 1.12);
+              if (puff.sprite.material.opacity <= 0.01) {
+                puff.sprite.visible = false;
+              }
+            });
+          }
+
+          if (smokeSystem) {
+            smokeSystem.puffs.forEach(puff => {
+              if (!puff.sprite.visible) return;
+              puff.sprite.position.addScaledVector(puff.vel, dt);
+              puff.vel.x *= Math.max(0, 1 - dt * 1.1);
+              puff.vel.z *= Math.max(0, 1 - dt * 1.1);
+              const nextScale = puff.sprite.scale.x + puff.growRate * dt;
+              puff.sprite.scale.set(nextScale, nextScale, 1);
+              puff.sprite.material.opacity = Math.max(0, 0.7 - state.explosionElapsed * 0.24);
+              if (puff.sprite.material.opacity <= 0.01) {
+                puff.sprite.visible = false;
+              }
+            });
+          }
+        }
+      }
+
+      // Update HUD & Web Audio
+      const boostNorm = THREE.MathUtils.clamp(state.turboBoost / 1.45, 0, 1);
+      hudRpm.textContent = Math.round(state.rpm).toLocaleString('fr-FR');
+      hudSpeed.textContent = Math.round(state.speedKmh).toLocaleString('fr-FR');
+      hudBoost.textContent = `${state.turboBoost.toFixed(2)} BAR`;
+      turboBar.style.width = `${Math.round(boostNorm * 100)}%`;
+      audioSynth.update(state.rpm, throttleNorm, boostNorm);
+
+      const speedRatio = THREE.MathUtils.clamp(state.speedKmh / EXPLOSION_SPEED, 0, 1);
+      const barPct = state.exploded
+        ? 0
+        : THREE.MathUtils.clamp(Math.max((state.rpm / 14000) * 100, speedRatio * 100), 4, 100);
+      gaugeBar.style.width = `${barPct}%`;
+
+      if (!isOrbiting && pointers.size === 0 && !state.exploded) {
+        camSpherical.theta += Math.sin(now * 0.0004) * 0.00035;
+      }
+
+      const spinSpeed = Math.min(72, (state.rpm / 60) * 0.55);
+      state.crankAngle += spinSpeed * dt * Math.PI * 2;
+
+      if (!state.exploded) {
+        const vibAmp = Math.min(0.085, 0.0025 + (state.rpm / 10000) * 0.014 + speedRatio * 0.035);
+        const camShake = THREE.MathUtils.clamp(
+          Math.max((state.rpm - 8000) / 55000, Math.pow(speedRatio, 2.2) * 0.15),
+          0,
+          0.16
+        );
+        const sx = Math.sin(now * 0.11) * camShake;
+        const sy = Math.cos(now * 0.13) * camShake;
+
+        if (hasWebGL && engineGroup && scene && camera && renderer) {
+          // Progressive exhaust manifold heat glow: cherry-red -> bright orange -> hot white-blue
+          const heatFactor = THREE.MathUtils.clamp(
+            Math.max((state.rpm - 4800) / 18000, (state.speedKmh - 420) / 580, boostNorm * 0.45),
+            0,
+            1
+          );
+          if (headerMaterial) {
+            headerMaterial.emissiveIntensity = heatFactor * 2.75;
+            if (state.speedKmh >= 880 || state.rpm > 27000) {
+              headerMaterial.emissive.setHex(0xdbeafe);
+            } else if (state.speedKmh >= 650 || state.rpm > 16000) {
+              headerMaterial.emissive.setHex(0xff6b00);
+            } else {
+              headerMaterial.emissive.setHex(0xff1e00);
+            }
+          }
+
+          if (platformLight) {
+            platformLight.color.setHex(state.speedKmh >= 820 ? 0xef4444 : 0x38e58d);
+            platformLight.intensity = 1.55 + heatFactor * 2.1;
+          }
+
+          // Animate 12 pistons, connecting rods, counterweights & combustion flashes
+          const stroke = 0.24;
+          for (let i = 0; i < cylinders.length; i++) {
+            const cyl = cylinders[i];
+            const theta = state.crankAngle + cyl.phase;
+            const disp = Math.sin(theta) * stroke;
+
+            cyl.piston.position.y = cyl.baseY + disp;
+            cyl.conRod.position.y = (cyl.baseY + disp) * 0.52;
+            cyl.conRod.rotation.z = Math.cos(theta) * 0.14;
+            cyl.cw.rotation.z = theta;
+
+            const firing = Math.sin(theta) > 0.86 && Math.cos(theta) < 0.1;
+            if (firing || state.rpm > 18000) {
+              cyl.glow.material.color.setHex(
+                state.speedKmh >= 880 ? 0x93c5fd : (throttleNorm > 0.55 ? 0x72f5b0 : 0x38e58d)
+              );
+              cyl.glow.material.opacity = state.rpm > 18000
+                ? Math.min(0.95, 0.42 + heatFactor * 0.53)
+                : 0.6 + throttleNorm * 0.35;
+            } else {
+              cyl.glow.material.opacity *= 0.78;
+            }
+          }
+
+          // Compress valve springs with camshaft lobes
+          for (let v = 0; v < valveSprings.length; v++) {
+            const vs = valveSprings[v];
+            const lift = Math.max(0, Math.sin(state.crankAngle * 0.5 + vs.phase));
+            vs.mesh.scale.y = 1 - lift * 0.24;
+            vs.mesh.position.y = vs.baseY + lift * 0.024;
+          }
+
+          // Rotate DOHC camshafts, timing gears & twin turbo impellers
+          camshafts.forEach(cam => {
+            cam.rotation.z = state.crankAngle * 0.5;
+          });
+          camGears.forEach(g => {
+            g.mesh.rotation.z = -state.crankAngle * g.rate;
+          });
+          turboImpellers.forEach(imp => {
+            imp.rotation.z += (6 + boostNorm * 48) * dt * Math.PI * 2;
+          });
+
+          engineGroup.position.x = Math.sin(now * 0.075) * vibAmp;
+          engineGroup.position.y = 0.18 + Math.cos(now * 0.095) * vibAmp;
+
+          applyCameraShakeAndOrbit(sx, sy);
+          renderer.render(scene, camera);
+        } else {
+          renderFallback2D(dt, sx, sy);
+        }
+      } else {
+        const blastShake = 0.36 * Math.exp(-state.explosionElapsed * 3.0);
+        const sx = Math.sin(now * 0.19) * blastShake;
+        const sy = Math.cos(now * 0.23) * blastShake;
+
+        if (hasWebGL && engineGroup && scene && camera && renderer) {
+          if (headerMaterial) {
+            headerMaterial.emissiveIntensity *= Math.max(0, 1 - dt * 2.4);
+          }
+          if (platformLight) {
+            platformLight.color.setHex(0xef4444);
+            platformLight.intensity = Math.max(0.25, 2.9 * Math.exp(-state.explosionElapsed * 2.2));
+          }
+
+          engineGroup.position.x = 0;
+          engineGroup.position.y = 0.18;
+
+          applyCameraShakeAndOrbit(sx, sy);
+          renderer.render(scene, camera);
+        } else {
+          renderFallback2D(dt, sx, sy);
+        }
+      }
+    }
+
+    window.addEventListener('load', () => {
+      try {
+        updateAudioBadge();
+        updateStatusUI();
+        updatePedalsUI();
+        resizeViewport();
+        applyCameraShakeAndOrbit();
+        animate(performance.now());
+      } catch (e) {
+        // Prevent uncaught startup errors
+      }
+    });
+  </script>
+</body>
+</html>
+```
